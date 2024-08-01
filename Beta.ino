@@ -1,75 +1,74 @@
-#include <DHT.h>
-#include <SoftwareSerial.h>
-#include <ArduinoJson.h>
+#include <ESP8266WiFi.h>
+#include <DHTesp.h>
 
-#define DHTPIN 2
-#define DHTTYPE DHT22
-#define CO2PIN A7
+#define DHTPIN 4
+DHTesp dht;
 
-DHT dht(DHTPIN, DHTTYPE);
-SoftwareSerial espSerial(16, 17);
+const char* ssid = "SSID";
+const char* password = "PW";
+const char* server = "IP";
+const int port = 1234;
 
 void setup() {
-  Serial.begin(9600);
-  espSerial.begin(9600);
-  dht.begin();
+  Serial.begin(115200);
+  Serial.println();
+  Serial.println("Status\tHumidity (%)\tTemperature (C)\t(F)\tHeatIndex (C)\t(F)\tCO2");
 
-  espSerial.println("AT");
-  delay(1000);
-  while (espSerial.available()) {
-    Serial.write(espSerial.read());
+  dht.setup(DHTPIN, DHTesp::DHT22);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
+  Serial.println("WiFi connected");
 }
 
 void loop() {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  int co2Value = analogRead(CO2PIN);
+  delay(dht.getMinimumSamplingPeriod());
 
-  Serial.print("Humidity: ");
-  Serial.print(h);
-  Serial.print(" %\t");
-  Serial.print("Temperature: ");
-  Serial.print(t);
-  Serial.println(" *C");
-  Serial.print("CO2: ");
-  Serial.println(co2Value);
+  float humidity = dht.getHumidity();
+  float temperature = dht.getTemperature();
+  int co2 = analogRead(A0);
 
-  String jsonData = createJSONData(t, h, co2Value);
-  sendToServer(jsonData);
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
 
-  delay(2000);
-}
+  Serial.print(dht.getStatusString());
+  Serial.print("\t");
+  Serial.print(humidity, 1);
+  Serial.print("\t\t");
+  Serial.print(temperature, 1);
+  Serial.print("\t\t");
+  Serial.print(dht.toFahrenheit(temperature), 1);
+  Serial.print("\t\t");
+  Serial.print(dht.computeHeatIndex(temperature, humidity, false), 1);
+  Serial.print("\t\t");
+  Serial.print(dht.computeHeatIndex(dht.toFahrenheit(temperature), humidity, true), 1);
+  Serial.print("\t\t");
+  Serial.println(co2);
 
-String createJSONData(float temperature, float humidity, int co2) {
-  StaticJsonDocument<200> doc;
-  doc["temperature"] = temperature;
-  doc["humidity"] = humidity;
-  doc["co2"] = co2;
+  String jsonPayload = "{\"temperature\":" + String(temperature) + ",\"humidity\":" + String(humidity) + ",\"co2\":" + String(co2) + "}";
+  Serial.println("Sending data: " + jsonPayload);
 
-  String jsonData;
-  serializeJson(doc, jsonData);
-  return jsonData;
-}
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    if (client.connect(server, port)) {
+      client.println("POST : Port");
+      client.println("Host: " + String(server));
+      client.println("Content-Type: application/json");
+      client.print("Content-Length: ");
+      client.println(jsonPayload.length());
+      client.println();
+      client.println(jsonPayload);
+    } else {
+      Serial.println("Failed to connect to server");
+    }
+  } else {
+    Serial.println("WiFi not connected");
+  }
 
-void sendToServer(String jsonData) {
-  espSerial.println("AT+CIPSTART=\"TCP\",\"<서버 IP>\",<포트>");
-  delay(2000);
-
-  String httpRequest = "POST /update HTTP/1.1\r\n";
-  httpRequest += "Host: <서버 IP>\r\n";
-  httpRequest += "Content-Type: application/json\r\n";
-  httpRequest += "Content-Length: " + String(jsonData.length()) + "\r\n";
-  httpRequest += "Connection: close\r\n\r\n";
-  httpRequest += jsonData;
-
-  espSerial.print("AT+CIPSEND=");
-  espSerial.println(httpRequest.length());
-  delay(1000);
-
-  espSerial.print(httpRequest);
-  delay(2000);
-
-  espSerial.println("AT+CIPCLOSE");
-  delay(1000);
+  delay(60000);
 }
