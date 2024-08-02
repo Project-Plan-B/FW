@@ -7,12 +7,11 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
 #define OLED_RESET -1
-#define SCREEN_ADDRESS 0x3C  // I2C 주소
+#define SCREEN_ADDRESS 0x3C
 
-#define DHTPIN 2    // DHT 센서 핀 (D4)
+#define DHTPIN 2
 DHTesp dht;
 
-// Initialize the OLED display
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 const char* ssid = "SSID";
@@ -26,7 +25,6 @@ void setup() {
   
   dht.setup(DHTPIN, DHTesp::DHT22);
 
-  // Initialize I2C and OLED display
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
@@ -34,12 +32,10 @@ void setup() {
 
   display.clearDisplay();
 
-  // Connect to WiFi
   WiFi.begin(ssid, password);
   bool wifiConnected = false;
   unsigned long startTime = millis();
   
-  // Check WiFi connection status
   while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) { // Wait for 10 seconds
     delay(500);
     Serial.print(".");
@@ -48,21 +44,19 @@ void setup() {
     wifiConnected = true;
   }
 
-  // Update OLED with WiFi status
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
   display.print("WiFi: ");
   display.println(wifiConnected ? "Connected" : "Failed");
 
-  // Display DHT sensor connection status
   display.setCursor(0, 10);
   display.print("DHT: ");
   display.println(dht.getStatusString());
 
   display.display();
   
-  delay(2000);  // Pause for 2 seconds
+  delay(2000); 
 }
 
 void loop() {
@@ -108,7 +102,6 @@ void loop() {
     Serial.println("WiFi not connected");
   }
 
-  // Update OLED display with sensor data and connection status
   display.clearDisplay();
   display.setCursor(0, 0);
   display.print("WiFi: ");
@@ -124,5 +117,5 @@ void loop() {
 
   display.display();
 
-  delay(60000);  // Delay between readings and updates
+  delay(60000); 
 }
